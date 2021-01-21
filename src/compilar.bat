@@ -1,0 +1,1 @@
+gcc -o principal principal.c astronum.c -I.
