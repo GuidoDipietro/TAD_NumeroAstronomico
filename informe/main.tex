@@ -193,8 +193,6 @@ Al ser un requerimiento del Trabajo Práctico la utilización de \verb|malloc| p
 
 Para reservar la memoria, se intentará realizar el \verb|malloc| para el puntero del \verb|struct|. Si falla, se retornará un puntero nulo.
 
-No haremos \verb|malloc| para el puntero del entero, ya que copiaremos el puntero a la cadena que se pase como argumento.
-
 \begin{lstlisting}[style=C]
     NumeroAstronomico* CrearDesdeCadena(char* cadena){
         // malloc del STRUCT
@@ -205,32 +203,35 @@ No haremos \verb|malloc| para el puntero del entero, ya que copiaremos el punter
 Ningún Número Astronómico puede comenzar con un char \verb|'0'|; esto se contempla a continuación:
 
 \begin{lstlisting}[style=C]
-    for(int i=0; cadena[i]=='0'; *(cadena)++);
+    for(int i=0; cadena[i]=='0'&&cadena[i]!='\0'; *(cadena)++);
 \end{lstlisting}
 
-Si la cadena brindada solamente está compuesta por ceros, el comportamiento es indefinido.\footnote{Como este \emph{TAD} está definido para enteros positivos, para crear un Número Astronómico de valor nulo (sumable), se debe utilizar en su lugar la cadena nula.}.
+Si la cadena brindada solamente está compuesta por ceros, el comportamiento es indefinido.\footnote{Este \emph{TAD} fue originalmente definido solo para enteros positivos.}.
 
 Luego, se evalúan otros tipos de errores (o la creación exitosa) y se retorna un puntero a Número Astronómico con el estado que corresponda:
 
 \begin{lstlisting}[style=C]
         // Caso cadena muy larga (>100 caracteres)
         if (strlen(cadena)>100) {
+            num->entero = strdup("");
             num->longitudError = Overflow;
         }
         // Caso todo bien (o cadena nula)
         else if (cadenaNumerica(cadena)){
-            num->entero = cadena;
-            num->longitudError = strlen(cadena);
+            char* clean_cadena = strdup(cadena);
+            num->entero = clean_cadena;
+            num->longitudError = strlen(clean_cadena);
         }
         // Caso cadena invalida
         else {
+            num->entero = strdup("");
             num->longitudError = CadenaInvalida;
         }
         return num;
     }
 \end{lstlisting}
 
-En los casos de error, la cadena será descartada y el puntero \verb|char* entero| contendrá información no definida.
+En los casos de error, la cadena será inicializada a una cadena vacía, a modo de no dejar un puntero con basura.
 
 La función \verb|cadenaNumerica(char*)| es privada y luce así:
 
@@ -249,7 +250,7 @@ Las otras dos opciones de creación utilizan la función \verb|CrearDesdeCadena(
 
 Si bien implementamos esta función para que funcione con un entero (no necesariamente de una sola cifra) seguido de ceros, conservamos el nombre original que se encuentra en la consigna.
 
-\verb|CrearDesdeCifraSeguidaDeCeros(int, int)| creará una cadena en base a lo que se le indique\footnote{Si la cifra indicada es un cero, el comportamiento es indefinido.}, y luego retornará un \verb|NumeroAstronomico*| creado con \verb|CrearDesdeCadena(char*)| utilizando la cadena que generó.
+\verb|CrearDesdeCifraSeguidaDeCeros(int, int)| creará una cadena en base a lo que se le indique\footnote{Si la cifra indicada es un cero, se creará un Número Astronómico de valor nulo. Si bien originalmente el \textit{TAD} se diseñó solo para enteros positivos, posteriores arreglos de \textit{memory leaks} llevaron a tomar esa decisión.}, y luego retornará un \verb|NumeroAstronomico*| creado con \verb|CrearDesdeCadena(char*)| utilizando la cadena que generó.
 
 Como precondición, fijamos  que la cantidad de ``ceros'' pedida no puede superar los $99$, y que la longitud total de la cadena no puede superar los $100$.\\
 Ante esas situaciones, retornará \verb|NULL| inmediatamente.
@@ -258,18 +259,23 @@ Ante esas situaciones, retornará \verb|NULL| inmediatamente.
     NumeroAstronomico* CrearDesdeCifraSeguidaDeCeros(int num, int ceros){
         // Evaluacion de precondiciones
         if (ceros>99) return NULL;
-        int longitud_num = (int) log10(num) + 1;    // cant de digitos de num
+        if (num==0) return CrearDesdeCadena("0");
+        int longitud_num = (int) log10(num) + 1;    // cantidad de digitos de num
         int longitud_total =  longitud_num + ceros;
         if (longitud_total > 100) return NULL;
     
         // Creacion de la cadena
-        char* cadena = malloc(longitud_total);
+        char* cadena = malloc(longitud_total+1);
         if(cadena==NULL) return NULL; // fallo malloc
-        itoa(num, cadena, 10); // copia num a cadena
-        for(int i=0; i<ceros; i++) cadena[i+longitud_num]='0'; // llena con 0s
+        sprintf(cadena, "%d", num); // copia num
+    
+        for(int i=0; i<ceros; i++) cadena[i+longitud_num]='0'; // llena el resto con 0
+    
         cadena[longitud_total] = '\0'; // fin de cadena
         
-        return CrearDesdeCadena(cadena);
+        NumeroAstronomico* temp = CrearDesdeCadena(cadena); // para evitar repetir el codigo del malloc
+        free(cadena);
+        return temp;
     }
 \end{lstlisting}
 
@@ -283,20 +289,20 @@ Usaremos el tiempo local que retorne \verb|time(time_t*)| como \emph{seeding} pa
 
 \begin{lstlisting}[style=C]
     NumeroAstronomico* CrearAleatorio(){
-        srand(time(NULL)); // seeding para aleatoriedad
+        srand(time(NULL)); // seeding para mayor aleatoriedad
     
         int longitud = 1 + rand() % 100; // entre 1 y 100
         char* cadena = malloc(longitud+1);
         if(cadena==NULL) return NULL; // fallo malloc
-    
+        
         // Creacion de cadena
         for(int i=0; i<longitud; i++){
-            char cifra_aleatoria = nac( rand()%10 );
+            char cifra_aleatoria = nac(rand()%10);
             cadena[i] = cifra_aleatoria;
         }
         cadena[longitud] = '\0';
-    
-        return CrearDesdeCadena(cadena);
+        NumeroAstronomico* temp = CrearDesdeCadena(cadena);
+        free(cadena); return temp;
     }
 \end{lstlisting}
 
@@ -343,14 +349,13 @@ Decidimos que la comparación por igual entre Números Astronómicos retornará 
     \item Tengan ambos el mismo tipo de error
 \end{itemize}
 
-Si tienen error, la cadena \verb|entero| es indefinida así que se ignora, y si no tienen error y su longitud almacenada es distinta, ya podemos retornar $0$ ya que ningún Número Astronómico comienza con $0$.
-
 Se implementa así:
 
 \begin{lstlisting}[style=C]
     int SonIguales(NumeroAstronomico* a, NumeroAstronomico* b){
         if(EsError(a) && EsError(b))
             return a->longitudError == b->longitudError;
+            
         if(a->longitudError != b->longitudError) return 0;
         int largo = a->longitudError; // si llegan aca, son iguales en largo
         int i=0;
@@ -397,7 +402,7 @@ La función \verb|longmax(NumeroAstronomico* a, NumeroAstronomico* b)| es propia
 
 \subsubsection{Suma}\label{aritmetica-suma}
 
-Finalmente, la función \verb|Suma(NumeroAstronomico*, NumeroAstronomico*)| retornará el puntero a Número Astronómico creado por \verb|CrearDesdeCadena(char*)|, pasándole como argumento la ``suma" de ambas cadenas (realizado con una función propia que explicaremos posteriormente).
+Finalmente, la función \verb|Sumar(NumeroAstronomico*, NumeroAstronomico*)| retornará el puntero a Número Astronómico creado por \verb|CrearDesdeCadena(char*)|, pasándole como argumento la ``suma" de ambas cadenas (realizado con una función propia que explicaremos posteriormente).
 
 En caso de que dicha cadena tenga una longitud mayor a $100$, \verb|CrearDesdeCadena(char*)| se encargará de retornar un \verb|NumeroAstronomico*| con el error \verb|Overflow|.
 
@@ -405,7 +410,7 @@ Por otro lado, en caso de que uno o ambos Números Astronómicos tengan la caden
 
 Si ambos fueran nulos, lo que se retornará será también un Número Astronómico nulo.
 
-En estos tres casos, se retornará un nuevo Número Astronómico para evitar apuntar a la misma dirección en memoria que el número que se pasa.
+En estos tres casos, se retornará un nuevo Número Astronómico para evitar apuntar a la misma dirección en memoria que el número que se pasa.\footnote{Cabe destacar que esto dio lugar a un problema en el uso práctico de la biblioteca, que cubriremos más adelante.}
 
 Además, si alguno de los números tiene otro tipo de error, se informará en pantalla y retornará un puntero nulo.
 
@@ -414,10 +419,10 @@ Su código:
 \begin{lstlisting}[style=C]
     NumeroAstronomico* Sumar(NumeroAstronomico* a, NumeroAstronomico* b){
         if(a==NULL || b==NULL) return NULL;
-        // Manejo de errores individuales
         if (EsSecuenciaInvalida(a) || EsSecuenciaInvalida(b)){
             fprintf(stderr, "Alguno de los numeros sumados es invalido.\n");
             NumeroAstronomico* invalido = malloc(sizeof(NumeroAstronomico));
+            invalido->entero = strdup("");
             invalido->longitudError = CadenaInvalida;
             return invalido;
         }
@@ -427,15 +432,15 @@ Su código:
             return CrearDesdeCadena(a->entero); // lo mismo
         if (EsSecuenciaNula(a) && EsSecuenciaNula(b))
             return CrearDesdeCadena(""); // si los dos son nulos retorna nulo
-        // End manejo de errores individuales //
     
         if (!EsError(a) && !EsError(b)){ // todo en orden
             char* suma = sumaCadenas(a->entero, a->longitudError, b->entero, b->longitudError);
-            // Si hubo Overflow (>100 caracteres), CrearDesdeCadena lo maneja
-            return CrearDesdeCadena(suma);
+            // Si hubo Overflow (>100 caracteres), CrearDesdeCadena lo va a manejar
+            NumeroAstronomico* temp = CrearDesdeCadena(suma);
+            free(suma); return temp;
         }
         else { // algun error no manejado
-            fprintf(stderr, "Ocurrio un error.\n");
+            fprintf(stderr, "Ocurrio un error en la suma.\n");
             return NULL;
         }
     }
@@ -456,12 +461,12 @@ Al reservar una cadena de esa longitud, estamos contemplando el caso máximo (po
         longmax++;
         char* corta = lena<lenb? strdup(a) : strdup(b);
         char* larga = lena<lenb? strdup(b) : strdup(a);
-        char* salida = malloc(longmax+1); // lo que se retornara
+        char* salida = malloc(longmax+1);
 \end{lstlisting}
 
 Para poder sumar cifra a cifra, necesitamos alinear ambas cadenas a derecha. Para conseguir eso, se rellena la cadena más corta con ceros a la izquierda.
 
-Sumaremos comenzando en el segundo carácter, a modo de dejar que la cadena comience en $0$ en caso de precisar la longitud máxima.
+Sumaremos comenzando en el segundo carácter\footnote{¿Por qué no sumar empezando por el último? El Guido del futuro se pregunta lo mismo.}, a modo de dejar que la cadena comience en $0$ en caso de precisar la longitud máxima.
 
 Por cada cifra que sume, además, se arreglarán los \emph{carries} siguiendo el siguiente algoritmo:
 
@@ -485,48 +490,52 @@ Un ejemplo de este procedimiento:
     \item Tercera suma (2+2): 06340?
     \item Cuarta suma (7+7 con carry): 06344? $\to$ 06354?
     \item Fin de cadena: 06354\verb|\|0
-    \item Arreglar puntero: 6354\verb|\|0
+    \item Arreglar puntero: 6354\verb|\|0 (posterior magia malloc para evitar el error \texttt{free(): invalid pointer})
 \end{enumerate}
 
 Su implementación en C (con las Macros que definimos en la subsección \ref{creacion} \nameref{creacion} pág. \pageref{macros-can-nac}):
 
 \begin{lstlisting}[style=C]
-    // Diferencia entre cadena de salida y corta (para rellenar con 0s)
-        int diff = longmax - strlen(corta);
-    
-        // A sumar!
-        int buffer;                     // auxiliar para carries
-        int carries;                    // auxiliar para carries
-        salida[0] = '0';                // primera cifra en 0
-        
-        // Suma caracter a caracter (de izquierda a derecha)
-        for(int i=1; i<longmax; i++){
-            // 0 o digito (cadena corta)
-            char padding_or_num = i<diff? '0' : corta[i-diff];
-            // digito (cadena larga)
-            int cifra = can(padding_or_num) + can(larga[i-1]);
-    
-            // asigna el valor char de esa cifra (solo las unidades)
-            salida[i] = nac(cifra%10);
-            // arregla los carries (suma 1 para atras con cada carry que surja)
-            buffer = cifra; // variable auxiliar para un poco de claridad
-            carries = 1;
-            while(buffer > 9){
-                // El digito N (carries) lugares a la izquierda + 1
-                buffer = can(salida[i-carries]+1);
-                // Se escribe en salida el valor de la unidad de eso
-                salida[i-carries] = nac(buffer%10);
-                carries++; // Por si el while itera
-            }
+    // Diferencia entre la larga y la corta (para rellenar con 0s)
+    int diff = longmax - strlen(corta);
+
+    // A sumar!
+    int buffer;                     // auxiliar para carries
+    int carries;                    // auxiliar para carries parte 2
+    salida[0] = '0';                // primera cifra en 0
+    // Suma caracter a caracter (de izquierda a derecha)
+    for(int i=1; i<longmax; i++){
+        char padding_or_num = i<diff? '0' : corta[i-diff];
+        // 0 o digito (cadena corta)
+        int cifra = can(padding_or_num) + can(larga[i-1]);
+        // digito (cadena larga)
+
+        // asigna el valor char de esa cifra (solo las unidades)
+        salida[i] = nac(cifra%10);
+
+        // arregla los carries (suma 1 para atras con cada carry que surja)
+        buffer = cifra; // variable auxiliar para un poco de claridad
+        carries = 1;
+        while(buffer > 9){
+            buffer = can(salida[i-carries]+1);
+            salida[i-carries] = nac(buffer%10);
+            carries++;
         }
-        
-        salida[longmax] = '\0'; // Fin de cadena
-        // Si empieza en 0 sobreestimamos, se arregla aqui
-        if (salida[0]=='0') *(salida)++;
-    
-        return salida;
     }
+    salida[longmax] = '\0'; // Fin de cadena
+
+    char* out = salida[0]=='0'? strdup(salida+1) : strdup(salida);
+    // Longitud sobreestimada
+
+    free(salida); free(corta); free(larga);
+    return out;
+}
 \end{lstlisting}
+
+El lector sabrá disculpar la aberración, inmundicia, desperdicio, porquería, bazofia, despojo de código que acaba de leer.\\
+Quien lo implementó, que es la misma persona que escribe este párrafo, no tiene idea de qué tenía en la cabeza al momento de hacerlo. Este algoritmo es horrible.
+
+Por favor, hágase un favor y olvídelo para siempre.
 
 \subsection{Salida}\label{salida}
 \bigbreak
@@ -684,11 +693,13 @@ La palabra \verb|error| solamente se incluye para que la función \texttt{Scan} 
         if(a==NULL || f==NULL) return 0;
         // buffers
         char cadena[100];
-        int longitud;
+        int longitud = 0;
         // lee longitud
-        int leido = fscanf(f, "% s % d\n", cadena, &longitud);
-        if(longitud > 0) //si no tiene error
+        int leido = fscanf(f, "%s %d\n", cadena, &longitud);
+        if(longitud > 0) {//si no tiene error
+            free(a->entero);
             a->entero = strdup(cadena);
+        }
         a->longitudError = longitud;
     
         return leido; // para conocer EOF
@@ -720,13 +731,14 @@ Vemos que es posible escribir y leer Números Astronómicos tanto válidos como 
 
 En este caso, podemos hacer funciones un poco más eficientes que las anteriores.
 
-Para escribir a un archivo, primero escribiremos el campo \texttt{longitudError}, y luego el entero \textbf{si y solo si} no tiene error. Porque, si tiene error, ¿cuál es el sentido de escribir una cadena que contenga información no definida?
+Para escribir a un archivo, primero escribiremos el campo \texttt{longitudError}, y luego el entero \textbf{si y solo si} no tiene error. Porque, si tiene error, ¿cuál es el sentido de escribir la cadena?
 
 Su implementación:
 
 \begin{lstlisting}[style=C]
     void Write(FILE* f, NumeroAstronomico* a){
         fwrite(&(a->longitudError), sizeof(int), 1, f);
+        
         if (a->longitudError > 0)
             fwrite(a->entero, sizeof(char), 1+(a->longitudError), f);
     }
@@ -738,14 +750,16 @@ Haber hecho esto así permite implementar la función de lectura binaria \verb|R
 
 \begin{lstlisting}[style=C]
     size_t Read(FILE* f, NumeroAstronomico* a){
-        // Primero lee longitud / error
-        int longitud;
+        // Primero leo longitud / error
+        int longitud = 0;
         size_t bytes_longitud = fread(&longitud, sizeof(int), 1, f);
         size_t bytes_cadena = 0;
+    
         // Si no es error
         if (longitud > 0){
             char* cadena = malloc(longitud+1);
             bytes_cadena = fread(cadena, sizeof(char), 1+longitud, f);
+            free(a->entero);
             a->entero = cadena;
         }
         // Si es error, solo necesito el codigo de error
@@ -781,6 +795,36 @@ Con esto concluímos el detalle de la implementación de todas las funciones en 
 Ver la sección \nameref{apendice}, página \pageref{ejemplos} para más ejemplos de la implementación, o en la página \pageref{github} para seguir el enlace al repositorio en GitHub con el código completo de todo el Trabajo Práctico.
 
 \newpage
+
+\section{Epílogo}
+
+Y así fue como el trabajo se entregó, no fue nunca corregido, y la materia de la que surgió su enunciado fue aprobada sin mayores dificultades.
+
+Al terminar el año de la forma más amena posible, pandemia mediante, y transitar el verano dejando fluir los problemas del 2020, tuve la idea de revisar este Trabajo para ver qué había sido de él.
+
+Tamaña sorpresa recibí al ejecutar el comando
+
+\begin{center}
+    \texttt{valgrind ./principal}
+\end{center}
+
+y ver que la cantidad de \textit{memory leaks} hacía que mi programa pareciera un colador de memoria.
+
+Eso me llevó a reflexionar. Es decir, a experimentar la reflexión de la luz al mirarme al espejo para ver la cara de quien había programado semejante desastre. Pista: fui yo.
+
+Pasé un rato solucionando los problemas que existían, y lamentablemente esto estropeó la calidad del código.\\
+Si bien los \textit{memleaks} se fueron para nunca más volver, el estilo de código se vio corrompido, y muchas implementaciones o \textit{tests} realizados en el programa principal involucraron una fea cantidad de código repetido, o desprolijo sin más.
+
+¿Es eso preferible a un programa más organizado pero lleno de \textit{bugs} invisibles? Posiblemente.
+
+¿Es la estrategia óptima? Quizás lo es para el contexto dado.\footnote{Contexto: no tengo ganas de invertir tanto tiempo en un TP de un año anterior. No tiene sentido.}
+
+¿Cuál es la estrategia óptima, independientemente del contexto? Refactorizar todo el código. Escribir las funciones problemáticas de nuevo, desde cero. Repensar el funcionamiento y alcance de la biblioteca y el \textit{TAD}.
+
+¿Se hará eso alguna vez? No.
+
+Gracias por su lectura, y espero que este informe haya sido de su agrado.
+
 \section{Apéndice} \label{apendice}
 
 \subsection{Repositorio en GitHub} \label{github}
@@ -792,12 +836,12 @@ En este repositorio se encuentra todo el código referido a este Trabajo Prácti
 
 \subsection{Ejemplos de uso} \label{ejemplos}
 
-Este programa puede ser ejecutar para obtener el resultado que se comenta al lado de cada línea.
+Este programa puede ser ejecutado para obtener el resultado que se comenta al lado de cada línea.
 
 Compilar utilizando el siguiente comando para generar el ejecutable \texttt{main}.
 
 \begin{center}
-    \texttt{gcc -o main principal.c astronum.c -I.}
+    \texttt{gcc -o main principal.c astronum.c -g -I.}
 \end{center}
 
 Para ver el código fuente, o en un formato un poco más prolijo, dirijirse al siguiente archivo en el repositorio en GitHub:
@@ -834,12 +878,15 @@ int main(){
     NumeroAstronomico* ceros2 = CrearDesdeCifraSeguidaDeCeros(1, 70);
     NumeroAstronomico* aleatorio = CrearAleatorio();
     NumeroAstronomico* potenciar = CrearDesdeCadena("2");
-    NumeroAstronomico* overflow = CrearDesdeCadena("1111111111111111111111111111111"
-    "11111111111111111111111111111111111111111111111111111"
-    "11111111111111111111111111111111111111111111111111111"
-    "111111111111111111111111111111111111111111111111111111111111111116"); // 203>100 digitos
+    NumeroAstronomico* overflow = CrearDesdeCadena(
+        "1111111111111111111111111111111"
+        "11111111111111111111111111111111111111111111111111111"
+        "11111111111111111111111111111111111111111111111111111"
+        "111111111111111111111111111111111111111111111111111111111111111116"); // 203>100 digitos
     NumeroAstronomico* pre_overflow = CrearDesdeCifraSeguidaDeCeros(9, 99); // si lo sumo a si mismo desborda
     NumeroAstronomico* ceros_no_anda = CrearDesdeCifraSeguidaDeCeros(0, 14);
+
+    NumeroAstronomico* temp_suma = NULL;
 
     //////// Algunos ejemplos ////////
 
@@ -869,9 +916,9 @@ int main(){
 
     // Lectura
 
-    NumeroAstronomico* temp = malloc(sizeof(NumeroAstronomico));
-    NumeroAstronomico* total = CrearDesdeCadena("");
-    NumeroAstronomico* total_b = CrearDesdeCadena("");
+    NumeroAstronomico* temp = CrearDesdeCadena(""); // para que tenga una inicializacion mas que malloc
+    NumeroAstronomico* total = CrearDesdeCadena("0");
+    NumeroAstronomico* total_b = CrearDesdeCadena("0");
 
     printf("------------Archivo NO binario------------\n\n");
     FILE* file_1 = fopen("file.txt", "r");
@@ -879,12 +926,19 @@ int main(){
     while(Scan(file_1, temp) != -1){
         printf("Leido:\n");
         Mostrar(temp, 3);
-        total = Sumar(total, temp);
+        if (!EsError(temp)) {
+            temp_suma = Sumar(total,temp);
+            FreeNumeroAstronomico(total);
+            total = CrearDesdeCadena(temp_suma->entero);
+            FreeNumeroAstronomico(temp_suma);
+        }
     }
-    
     printf("Suma total:\n");
     Mostrar(total, 3);
     fclose(file_1);
+
+    FreeNumeroAstronomico(temp);
+    temp = CrearDesdeCadena("");
 
     printf("\n------------Archivo binario------------\n\n");
     FILE* file_b_1 = fopen("file_b.txt", "rb");
@@ -892,19 +946,20 @@ int main(){
     while(Read(file_b_1, temp)){
         printf("Leido:\n");
         Mostrar(temp, 3);
-        total_b = Sumar(total_b, temp);
+        if (!EsError(temp)) {
+            temp_suma = Sumar(total_b,temp);
+            FreeNumeroAstronomico(total_b);
+            total_b = CrearDesdeCadena(temp_suma->entero);
+            FreeNumeroAstronomico(temp_suma);
+        }
     }
-    
     printf("Suma total:\n");
     Mostrar(total_b, 3);
     fclose(file_b_1);
 
-    if(temp!=NULL)
-        FreeNumeroAstronomico(temp);
-    if(total!=NULL)
-        FreeNumeroAstronomico(total);
-    if(total_b!=NULL)
-        FreeNumeroAstronomico(total_b);
+    if(temp) FreeNumeroAstronomico(temp);
+    if(total) FreeNumeroAstronomico(total);
+    if(total_b) FreeNumeroAstronomico(total_b);
     
     // MOSTRAR //
 
@@ -918,55 +973,110 @@ int main(){
     Mostrar(ceros1, 2);
     Mostrar(ceros2, 3);
     Mostrar(aleatorio, 4);
-    Mostrar(invalido, 4); // Muestra error
-    Mostrar(overflow, 5);  // Muestra error
-    Mostrar(ceros_no_anda, 5); // comportamiento indefinido
+    Mostrar(invalido, 4);    // Muestra error
+    Mostrar(overflow, 5);    // Muestra error
+    Mostrar(ceros_no_anda, 5);  // comportamiento indefinido
 
     // ERRORES //
 
-    printf("% d\n", EsSecuenciaNula(cosaNula));                   // 1
-    printf("% d\n", EsSecuenciaInvalida(invalido));               // 1
-    printf("% d\n", EsSecuenciaInvalida(p3));                     // 0
-    printf("% d\n", p1->longitudError);                           // 26
-    printf("% d\n", EsError(chiquito) || EsError(cosaNula));      // 1
+    printf("%d\n", EsSecuenciaNula(cosaNula));                   // 1
+    printf("%d\n", EsSecuenciaInvalida(invalido));               // 1
+    printf("%d\n", EsSecuenciaInvalida(p3));                     // 0
+    printf("%d\n", p1->longitudError);                           // 26
+    printf("%d\n", EsError(chiquito) || EsError(cosaNula));      // 1
 
     // ARITMETICA //
 
     // Iguales
-    printf("% d\n", SonIguales(chiquito, otropeque)); // chiquito!=otropeque => 0
-    printf("% d\n", SonIguales(chiquito, pequenio)); // chiquito==pequenio => 1
-    printf("% d\n", SonIguales(p3, p3_equivalente)); // p3==p3_equivalente => 1
-    printf("% d\n", SonIguales(ceros1, ceros2)); // ceros1 > ceros2  => 0
-    printf("% d\n", SonIguales(chiquito, Sumar(cosaNula, chiquito))); // a+nulo = a => 1
-    printf("% d\n", SonIguales(invalido, otro_invalido)); // mismo tipo de error => 1
-    printf("% d\n", SonIguales(p1, p1_con_ceros)); // son iguales => 1
+    printf("%d\n", SonIguales(chiquito, otropeque)); // chiquito!=otropeque => 0
+    printf("%d\n", SonIguales(chiquito, pequenio)); // chiquito==pequenio => 1
+    printf("%d\n", SonIguales(p3, p3_equivalente)); // p3==p3_equivalente => 1
+    printf("%d\n", SonIguales(ceros1, ceros2));  // ceros1 > ceros2  => 0
+
+    temp_suma = Sumar(cosaNula, chiquito);
+    printf("%d\n", SonIguales(chiquito, temp_suma)); // a+nulo = a => 1
+    FreeNumeroAstronomico(temp_suma);
+
+    printf("%d\n", SonIguales(invalido, otro_invalido)); // mismo tipo de error => 1
+    printf("%d\n", SonIguales(p1, p1_con_ceros));   // son iguales => 1
 
     // Menor
-    printf("% d\n", EsMenor(p1, p2)); // p1<p2  => 1
-    printf("% d\n", EsMenor(p2, p1)); // p2>p1  => 0
-    printf("% d\n", EsMenor(p1, p1)); // p1==p1 => 0
-    printf("% d\n", EsMenor(largo1, largo2)); // largo1<largo2    => 1
-    printf("% d\n", EsMenor(largo1, largo1)); // largo1==largo1   => 0
-    printf("% d\n", EsMenor(largo2, largo1)); // largo2>largo1    => 0
-    printf("% d\n", EsMenor(ceros1, ceros2)); // ceros1 > ceros2  => 0
-    printf("% d\n", EsMenor(ceros2, ceros1)); // ceros2 < ceros1  => 1
-    printf("% d\n", EsMenor(aleatorio, ceros2)); // depende del azar
+    printf("%d\n", EsMenor(p1, p2)); // p1<p2            => 1
+    printf("%d\n", EsMenor(p2, p1)); // p2>p1            => 0
+    printf("%d\n", EsMenor(p1, p1)); // p1==p1           => 0
+    printf("%d\n", EsMenor(largo1, largo2)); // largo1<largo2    => 1
+    printf("%d\n", EsMenor(largo1, largo1)); // largo1==largo1   => 0
+    printf("%d\n", EsMenor(largo2, largo1)); // largo2>largo1    => 0
+    printf("%d\n", EsMenor(ceros1, ceros2)); // ceros1 > ceros2  => 0
+    printf("%d\n", EsMenor(ceros2, ceros1)); // ceros2 < ceros1  => 1
+    printf("%d\n", EsMenor(aleatorio, ceros2)); // depende del azar
 
     // Suma
-    Mostrar(Sumar(p3, largo2), 5); // anda
-    Mostrar(Sumar(otropeque, ceros1), 4); // anda
-    for(int i=0; i<199; i++)
-        potenciar = Sumar(potenciar, potenciar); // calcula 2^200
+
+    // usando TEMP_SUMA porque si no salen leaks locos
+    // ver ASTRONUM.C : Sumar() para una explicacion (y una disculpa) del
+    // Guido del futuro (que ya es el Guido del pasado)
+
+    temp_suma = Sumar(p3, largo2);
+    Mostrar(temp_suma, 5);                                       // anda
+    FreeNumeroAstronomico(temp_suma);
+    
+    temp_suma = Sumar(otropeque, ceros1);
+    Mostrar(temp_suma, 4);                                       // anda
+    FreeNumeroAstronomico(temp_suma);
+
+    for (int i=0; i<199; i++) {                                  // calcula 2^200
+        temp_suma = Sumar(potenciar, potenciar);
+        FreeNumeroAstronomico(potenciar);
+        potenciar = CrearDesdeCadena(temp_suma->entero);
+        FreeNumeroAstronomico(temp_suma);
+    }
+
     Mostrar(potenciar, 5); // muestra 2^200
     Mostrar(pre_overflow, 4); // numero todo correcto
-    Mostrar(Sumar(pre_overflow, pre_overflow), 4); // pero *2 da overflow (Muestra error)
-    Mostrar(Sumar(invalido, p1), 5); // error de Sumar() y Mostrar(), se muestran
-    printf("% d\n", EsSecuenciaNula(Sumar(cosaNula, cosaNula))); // nulo+nulo = nulo => 1
-    Mostrar(Sumar(cosaNula, p1), 4); // nulo+p1 = p1
+
+    temp_suma = Sumar(pre_overflow, pre_overflow);
+    Mostrar(temp_suma, 4); // pero *2 da overflow (Muestra error)
+    FreeNumeroAstronomico(temp_suma);
+
+    temp_suma = Sumar(invalido, p1);
+    Mostrar(temp_suma, 5); // error de Sumar() y Mostrar(), se muestran
+    FreeNumeroAstronomico(temp_suma);
+
+    temp_suma = Sumar(cosaNula, cosaNula);
+    printf("%d\n", EsSecuenciaNula(temp_suma)); // nulo+nulo = nulo => 1
+    FreeNumeroAstronomico(temp_suma);
+
+    temp_suma = Sumar(cosaNula, p1);
+    Mostrar(temp_suma, 4); // nulo+p1 = p1
+    FreeNumeroAstronomico(temp_suma);
 
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Tiempo de ejecucion: %f\n", time_spent);
+
+    // FREE POINTERS!!
+
+    FreeNumeroAstronomico(p1);
+    FreeNumeroAstronomico(p1_con_ceros);
+    FreeNumeroAstronomico(p2);
+    FreeNumeroAstronomico(p3);
+    FreeNumeroAstronomico(p3_equivalente);
+    FreeNumeroAstronomico(cosaNula);
+    FreeNumeroAstronomico(invalido);
+    FreeNumeroAstronomico(otro_invalido);
+    FreeNumeroAstronomico(chiquito);
+    FreeNumeroAstronomico(pequenio);
+    FreeNumeroAstronomico(otropeque);
+    FreeNumeroAstronomico(largo1);
+    FreeNumeroAstronomico(largo2);
+    FreeNumeroAstronomico(ceros1);
+    FreeNumeroAstronomico(ceros2);
+    FreeNumeroAstronomico(aleatorio);
+    FreeNumeroAstronomico(potenciar);
+    FreeNumeroAstronomico(overflow);
+    FreeNumeroAstronomico(pre_overflow);
+    FreeNumeroAstronomico(ceros_no_anda);
 
     return 0;
 }
