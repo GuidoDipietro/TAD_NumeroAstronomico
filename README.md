@@ -17,6 +17,6 @@ El código fuente de la biblioteca, así como otros archivos de prueba, se inclu
 
 ## Compilar
 Para compilar hacer doble click en el archivo "compilar.bat" o ingresar en consola el siguiente comando:  
-```gcc -o principal principal.c astronum.c -g -I.```
+```gcc -o principal principal.c astronum.c -lm -I.```
 
 Para Linux, se provee el Makefile.
