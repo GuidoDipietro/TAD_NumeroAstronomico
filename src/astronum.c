@@ -26,23 +26,26 @@ static int cadenaNumerica(char* cadena){
 // Si la cadena dada solamente tiene "0"s el comportamiento es indefinido.
 NumeroAstronomico* CrearDesdeCadena(char* cadena){
     ////// MALLOC //////
-    NumeroAstronomico *num = malloc(sizeof(NumeroAstronomico));
+    NumeroAstronomico* num = malloc(sizeof(NumeroAstronomico));
     if (num==NULL) return NULL; // si falla
     ////// END MALLOC //////
 
-    for(int i=0; cadena[i]=='0'; *(cadena)++);
+    for(int i=0; cadena[i]=='0'&&cadena[i]!='\0'; *(cadena)++);
 
     // Caso cadena muy larga (>100 caracteres)
     if (strlen(cadena)>100) {
+        num->entero = strdup("");
         num->longitudError = Overflow;
     }
     // Caso todo bien (o cadena nula)
     else if (cadenaNumerica(cadena)){
-        num->entero = cadena;
-        num->longitudError = strlen(cadena);
+        char* clean_cadena = strdup(cadena);
+        num->entero = clean_cadena;
+        num->longitudError = strlen(clean_cadena);
     }
     // Caso cadena inválida
     else {
+        num->entero = strdup("");
         num->longitudError = CadenaInvalida;
     }
     return num;
@@ -56,20 +59,24 @@ NumeroAstronomico* CrearDesdeCadena(char* cadena){
 NumeroAstronomico* CrearDesdeCifraSeguidaDeCeros(int num, int ceros){
     // Evaluación de precondiciones
     if (ceros>99) return NULL;
+    if (num==0) return CrearDesdeCadena("0");
     int longitud_num = (int) log10(num) + 1;    // cantidad de digitos de num
     int longitud_total =  longitud_num + ceros;
     if (longitud_total > 100) return NULL;
 
     // Creación de la cadena
-    char* cadena = malloc(longitud_total);
+    char* cadena = malloc(longitud_total+1);
     if(cadena==NULL) return NULL; // fallo malloc
-    itoa(num, cadena, 10); // copia num
+    sprintf(cadena, "%d", num); // itoa no es std
+    // itoa(num, cadena, 10); // copia num
 
     for(int i=0; i<ceros; i++) cadena[i+longitud_num]='0'; // llena el resto con 0
 
     cadena[longitud_total] = '\0'; // fin de cadena
     
-    return CrearDesdeCadena(cadena); // para evitar repetir el código del malloc
+    NumeroAstronomico* temp = CrearDesdeCadena(cadena); // para evitar repetir el código del malloc
+    free(cadena);
+    return temp;
 }
 
 // Si el programa se ejecuta más de una vez por segundo, el resultado generado es el mismo
@@ -88,7 +95,9 @@ NumeroAstronomico* CrearAleatorio(){
     }
     cadena[longitud] = '\0';
 
-    return CrearDesdeCadena(cadena); // para evitar repetir el código del malloc
+    NumeroAstronomico* temp = CrearDesdeCadena(cadena); // para evitar repetir el código del malloc
+    free(cadena);
+    return temp;
 }
 
 // Libera memoria
@@ -214,10 +223,16 @@ static char* sumaCadenas(const char* a, int lena, const char* b, int lenb){
     }
     salida[longmax] = '\0'; // Fin de cadena
 
-    if (salida[0]=='0') *(salida)++; //Si empieza en 0 movemos el puntero 1 lugar para que no lo haga
-    // Este caso sucede cuando la longitud máxima se sobreestimó
+    // Retornando...
 
-    return salida;
+    char* out = salida[0]=='0'? strdup(salida+1) : strdup(salida);
+    // Chequea si empieza en 0 porque puede haberse
+    // sobreestimado la longitud de la salida
+
+    // LEAKS!!!
+    free(salida); free(corta); free(larga);
+
+    return out;
 }
 // end auxiliares //
 
@@ -225,12 +240,22 @@ static char* sumaCadenas(const char* a, int lena, const char* b, int lenb){
 // Avisa si alguno de los números tiene error
 // Si uno de los números es secuencia nula, se cuenta como cero (si son nulos los dos retorna nulo)
 // Si ocurre un error de algún otro tipo, retorna NULL
+
+// COMENTARIO DEL GUIDO DEL FUTURO (ahora del pasado):
+// Hubiera convenido hacer otra implementación de esta función.
+// Si quiero hacer algo como
+// num1 = Sumar(num1, num2);
+// Tengo problemas de memoria dinámica. Necesito una variable temporal y
+// quedan cosas muy feas. Hubiera sido mejor algo del estilo:
+// Sumar(NumeroAstronomico** destino, NumeroAstronomico* num1, NumeroAstronomico* num2);
+
 NumeroAstronomico* Sumar(NumeroAstronomico* a, NumeroAstronomico* b){
     if(a==NULL || b==NULL) return NULL;
     // Manejo de errores individuales
     if (EsSecuenciaInvalida(a) || EsSecuenciaInvalida(b)){
         fprintf(stderr, "Alguno de los numeros sumados es invalido.\n");
         NumeroAstronomico* invalido = malloc(sizeof(NumeroAstronomico));
+        invalido->entero = strdup("");
         invalido->longitudError = CadenaInvalida;
         return invalido;
     }
@@ -242,7 +267,9 @@ NumeroAstronomico* Sumar(NumeroAstronomico* a, NumeroAstronomico* b){
     if (!EsError(a) && !EsError(b)){ // todo en orden
         char* suma = sumaCadenas(a->entero, a->longitudError, b->entero, b->longitudError);
         // Si hubo Overflow (>100 caracteres), CrearDesdeCadena lo va a manejar
-        return CrearDesdeCadena(suma); // para evitar repetir el malloc*/
+        NumeroAstronomico* temp = CrearDesdeCadena(suma); // para evitar repetir el malloc*/
+        free(suma);
+        return temp;
     }
     else { // algún error no manejado
         fprintf(stderr, "Ocurrio un error en la suma.\n");
@@ -284,13 +311,15 @@ int EsMenor(NumeroAstronomico* a, NumeroAstronomico* b){
 
 size_t Read(FILE* f, NumeroAstronomico* a){
     // Primero leo longitud / error
-    int longitud;
+    int longitud = 0;
     size_t bytes_longitud = fread(&longitud, sizeof(int), 1, f);
     size_t bytes_cadena = 0;
+
     // Si no es error
     if (longitud > 0){
         char* cadena = malloc(longitud+1);
         bytes_cadena = fread(cadena, sizeof(char), 1+longitud, f);
+        free(a->entero);
         a->entero = cadena;
     }
     // Si es error, solo necesito el codigo de error
@@ -312,11 +341,13 @@ int Scan(FILE* f, NumeroAstronomico* a){
     if(a==NULL || f==NULL) return 0;
     // buffers
     char cadena[100];
-    int longitud;
+    int longitud = 0;
     // lee longitud
     int leido = fscanf(f, "%s %d\n", cadena, &longitud);
-    if(longitud > 0) //si no tiene error
+    if(longitud > 0) {//si no tiene error
+        free(a->entero);
         a->entero = strdup(cadena);
+    }
     a->longitudError = longitud;
 
     return leido; // para conocer EOF

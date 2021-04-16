@@ -23,12 +23,15 @@ int main(){
     NumeroAstronomico* ceros2 = CrearDesdeCifraSeguidaDeCeros(1, 70);
     NumeroAstronomico* aleatorio = CrearAleatorio();
     NumeroAstronomico* potenciar = CrearDesdeCadena("2");
-    NumeroAstronomico* overflow = CrearDesdeCadena("1111111111111111111111111111111"
-    "11111111111111111111111111111111111111111111111111111"
-    "11111111111111111111111111111111111111111111111111111"
-    "111111111111111111111111111111111111111111111111111111111111111116"); // 203>100 digitos
+    NumeroAstronomico* overflow = CrearDesdeCadena(
+        "1111111111111111111111111111111"
+        "11111111111111111111111111111111111111111111111111111"
+        "11111111111111111111111111111111111111111111111111111"
+        "111111111111111111111111111111111111111111111111111111111111111116"); // 203>100 digitos
     NumeroAstronomico* pre_overflow = CrearDesdeCifraSeguidaDeCeros(9, 99); // si lo sumo a sí mismo desborda
     NumeroAstronomico* ceros_no_anda = CrearDesdeCifraSeguidaDeCeros(0, 14);
+
+    NumeroAstronomico* temp_suma = NULL;
 
     //////// Algunos ejemplos ////////
 
@@ -58,9 +61,9 @@ int main(){
 
     // Lectura
 
-    NumeroAstronomico* temp = malloc(sizeof(NumeroAstronomico));
-    NumeroAstronomico* total = CrearDesdeCadena("");
-    NumeroAstronomico* total_b = CrearDesdeCadena("");
+    NumeroAstronomico* temp = CrearDesdeCadena(""); // para que tenga una inicialización más que malloc
+    NumeroAstronomico* total = CrearDesdeCadena("0");
+    NumeroAstronomico* total_b = CrearDesdeCadena("0");
 
     printf("------------Archivo NO binario------------\n\n");
     FILE* file_1 = fopen("file.txt", "r");
@@ -68,11 +71,19 @@ int main(){
     while(Scan(file_1, temp) != -1){
         printf("Leido:\n");
         Mostrar(temp, 3);
-        total = Sumar(total, temp);
+        if (!EsError(temp)) {
+            temp_suma = Sumar(total,temp);
+            FreeNumeroAstronomico(total);
+            total = CrearDesdeCadena(temp_suma->entero);
+            FreeNumeroAstronomico(temp_suma);
+        }
     }
     printf("Suma total:\n");
     Mostrar(total, 3);
     fclose(file_1);
+
+    FreeNumeroAstronomico(temp);
+    temp = CrearDesdeCadena("");
 
     printf("\n------------Archivo binario------------\n\n");
     FILE* file_b_1 = fopen("file_b.txt", "rb");
@@ -80,15 +91,20 @@ int main(){
     while(Read(file_b_1, temp)){
         printf("Leido:\n");
         Mostrar(temp, 3);
-        total_b = Sumar(total_b, temp);
+        if (!EsError(temp)) {
+            temp_suma = Sumar(total_b,temp);
+            FreeNumeroAstronomico(total_b);
+            total_b = CrearDesdeCadena(temp_suma->entero);
+            FreeNumeroAstronomico(temp_suma);
+        }
     }
     printf("Suma total:\n");
     Mostrar(total_b, 3);
     fclose(file_b_1);
 
-    if(temp!=NULL) FreeNumeroAstronomico(temp);
-    if(total!=NULL) FreeNumeroAstronomico(total);
-    if(total_b!=NULL) FreeNumeroAstronomico(total_b);
+    if(temp) FreeNumeroAstronomico(temp);
+    if(total) FreeNumeroAstronomico(total);
+    if(total_b) FreeNumeroAstronomico(total_b);
     
     // MOSTRAR //
 
@@ -121,7 +137,11 @@ int main(){
     printf("%d\n", SonIguales(chiquito, pequenio));              // chiquito==pequenio => 1
     printf("%d\n", SonIguales(p3, p3_equivalente));              // p3==p3_equivalente => 1
     printf("%d\n", SonIguales(ceros1, ceros2));                  // ceros1 > ceros2  => 0
-    printf("%d\n", SonIguales(chiquito, Sumar(cosaNula, chiquito))); // a+nulo = a => 1
+
+    temp_suma = Sumar(cosaNula, chiquito);
+    printf("%d\n", SonIguales(chiquito, temp_suma)); // a+nulo = a => 1
+    FreeNumeroAstronomico(temp_suma);
+
     printf("%d\n", SonIguales(invalido, otro_invalido));         // mismo tipo de error => 1
     printf("%d\n", SonIguales(p1, p1_con_ceros));                // son iguales => 1
 
@@ -137,19 +157,71 @@ int main(){
     printf("%d\n", EsMenor(aleatorio, ceros2));                  // depende del azar
 
     // Suma
-    Mostrar(Sumar(p3, largo2), 5);                               // anda
-    Mostrar(Sumar(otropeque, ceros1), 4);                        // anda
-    for(int i=0; i<199; i++) potenciar = Sumar(potenciar, potenciar); // calcula 2^200
+
+    // usando TEMP_SUMA porque si no salen leaks locos
+    // ver ASTRONUM.C : Sumar() para una explicación (y una disculpa) del
+    // Guido del futuro (que ya es el Guido del pasado)
+
+    temp_suma = Sumar(p3, largo2);
+    Mostrar(temp_suma, 5);                                       // anda
+    FreeNumeroAstronomico(temp_suma);
+    
+    temp_suma = Sumar(otropeque, ceros1);
+    Mostrar(temp_suma, 4);                                       // anda
+    FreeNumeroAstronomico(temp_suma);
+
+    for (int i=0; i<199; i++) {                                  // calcula 2^200
+        temp_suma = Sumar(potenciar, potenciar);
+        FreeNumeroAstronomico(potenciar);
+        potenciar = CrearDesdeCadena(temp_suma->entero);
+        FreeNumeroAstronomico(temp_suma);
+    }
+
     Mostrar(potenciar, 5);                                       // muestra 2^200
     Mostrar(pre_overflow, 4);                                    // número todo correcto
-    Mostrar(Sumar(pre_overflow, pre_overflow), 4);               // pero *2 da overflow (Muestra error)
-    Mostrar(Sumar(invalido, p1), 5);                             // error de Sumar() y Mostrar(), se muestran
-    printf("%d\n", EsSecuenciaNula(Sumar(cosaNula, cosaNula)));  // nulo+nulo = nulo => 1
-    Mostrar(Sumar(cosaNula, p1), 4);                             // nulo+p1 = p1
+
+    temp_suma = Sumar(pre_overflow, pre_overflow);
+    Mostrar(temp_suma, 4);                                           // pero *2 da overflow (Muestra error)
+    FreeNumeroAstronomico(temp_suma);
+
+    temp_suma = Sumar(invalido, p1);
+    Mostrar(temp_suma, 5);                                           // error de Sumar() y Mostrar(), se muestran
+    FreeNumeroAstronomico(temp_suma);
+
+    temp_suma = Sumar(cosaNula, cosaNula);
+    printf("%d\n", EsSecuenciaNula(temp_suma));                      // nulo+nulo = nulo => 1
+    FreeNumeroAstronomico(temp_suma);
+
+    temp_suma = Sumar(cosaNula, p1);
+    Mostrar(temp_suma, 4);                                           // nulo+p1 = p1
+    FreeNumeroAstronomico(temp_suma);
 
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Tiempo de ejecucion: %f\n", time_spent);
+
+    // FREE POINTERS!!
+
+    FreeNumeroAstronomico(p1);
+    FreeNumeroAstronomico(p1_con_ceros);
+    FreeNumeroAstronomico(p2);
+    FreeNumeroAstronomico(p3);
+    FreeNumeroAstronomico(p3_equivalente);
+    FreeNumeroAstronomico(cosaNula);
+    FreeNumeroAstronomico(invalido);
+    FreeNumeroAstronomico(otro_invalido);
+    FreeNumeroAstronomico(chiquito);
+    FreeNumeroAstronomico(pequenio);
+    FreeNumeroAstronomico(otropeque);
+    FreeNumeroAstronomico(largo1);
+    FreeNumeroAstronomico(largo2);
+    FreeNumeroAstronomico(ceros1);
+    FreeNumeroAstronomico(ceros2);
+    FreeNumeroAstronomico(aleatorio);
+    FreeNumeroAstronomico(potenciar);
+    FreeNumeroAstronomico(overflow);
+    FreeNumeroAstronomico(pre_overflow);
+    FreeNumeroAstronomico(ceros_no_anda);
 
     return 0;
 }
